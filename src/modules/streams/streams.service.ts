@@ -21,11 +21,9 @@ export class StreamsService {
       clientId: process.env.TEST_ID,
       clientSecret: process.env.TEST_SECRET,
     });
-    this.migrateStreams(40, 50);
-    // this.migrateStreams(50, 60);
-    // this.migrateStreams(60, 70);
-    // this.migrateStreams(80, 90);
-    // this.migrateStreams(90, 100);
+    this.migrateStreams(0, 20);
+    this.migrateStreams(20, 40);
+    this.migrateStreams(40, 60);
   }
 
   async getStreams(userId, before, after, limit, offset) {
@@ -38,7 +36,7 @@ export class StreamsService {
           bool: {
             must: [
               {
-                match: {
+                match_phrase: {
                   userId,
                 },
               },
@@ -72,12 +70,12 @@ export class StreamsService {
           bool: {
             must: [
               {
-                match: {
+                match_phrase: {
                   userId,
                 },
               },
               {
-                match: {
+                match_phrase: {
                   trackId,
                 },
               },
@@ -109,12 +107,12 @@ export class StreamsService {
           bool: {
             must: [
               {
-                match: {
+                match_phrase: {
                   userId,
                 },
               },
               {
-                match: {
+                match_phrase: {
                   trackId,
                 },
               },
@@ -148,12 +146,12 @@ export class StreamsService {
           bool: {
             must: [
               {
-                match: {
+                match_phrase: {
                   userId,
                 },
               },
               {
-                match: {
+                match_phrase: {
                   artistId,
                 },
               },
@@ -243,7 +241,7 @@ export class StreamsService {
       size: 1,
       body: {
         query: {
-          match: {
+          match_phrase: {
             userId,
           },
         },
@@ -284,17 +282,37 @@ export class StreamsService {
     //@ts-ignore
     const files = (await getFiles('./gcp')).filter((a) => a.endsWith('.json'));
 
-    for (let i = start; i < end; i++) {
+    const filesIds = {};
+
+    for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const id = file.substring(58).split('/')[0];
-      console.log(file, id);
-      const streams1 = JSON.parse(fs.readFileSync(file).toString());
-      console.log('length', streams1.length);
+      if (!filesIds[id]) filesIds[id] = [];
+      filesIds[id].push(file);
+    }
+
+    const ids = Object.keys(filesIds);
+    if (end > ids.length) end = ids.length;
+    for (let i = start; i < end; i++) {
+      const id = ids[i];
+      const idFiles = filesIds[id];
+
+      const streams1 = new Set();
+      for (let j = 0; j < idFiles.length; j++) {
+        JSON.parse(fs.readFileSync(idFiles[j]).toString()).forEach((a) =>
+          streams1.add(a),
+        );
+      }
+
+      console.log('length', streams1.size);
       const streams = [];
       const failed = [];
 
-      for (let j = 0; j < streams1.length; j++) {
-        const stream = streams1[j];
+      for (
+        let it = streams1.values(), stream = null;
+        (stream = it.next().value);
+
+      ) {
         if (failed.indexOf(`${stream[2]} - ${stream[1]}`) > -1) continue;
         const track = await this.getTrack(stream[2], stream[1]);
 
@@ -335,12 +353,12 @@ export class StreamsService {
           bool: {
             must: [
               {
-                match: {
+                match_phrase: {
                   name: trackName,
                 },
               },
               {
-                match: {
+                match_phrase: {
                   artistName,
                 },
               },
@@ -349,7 +367,7 @@ export class StreamsService {
         },
       },
     });
-    if (body.hits.hits.length == 1) {
+    if (body.hits.hits.length === 1) {
       return this.convertToTrack(body.hits.hits[0]);
     } else {
       const track = (
