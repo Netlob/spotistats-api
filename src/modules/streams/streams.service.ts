@@ -14,6 +14,8 @@ const stat = promisify(fs.stat);
 export class StreamsService {
   spotifyApi: any;
   tokens: string[] = [];
+  clientids: string[] = [];
+  clientsecrets: string[] = [];
   constructor(
     private readonly elasticsearchService: ElasticsearchService, // private prisma: PrismaService, // private authService: AuthService,
   ) {
@@ -34,6 +36,8 @@ export class StreamsService {
         'access_token'
       ];
       this.tokens.push(token);
+      this.tokens.push(ids[i]);
+      this.tokens.push(secrets[i]);
       this.spotifyApi.setAccessToken(token);
     }
     this.migrateStreams(0, 20);
@@ -382,12 +386,15 @@ export class StreamsService {
     if (body.hits.hits.length === 1) {
       return this.convertToTrack(body.hits.hits[0]);
     } else {
-      this.spotifyApi.setAccessToken(
-        this.tokens[Math.floor(Math.random() * 9)],
-      );
+      const rand = Math.floor(Math.random() * 9);
+      const sApi = new SpotifyWebApi({
+        clientId: this.clientids[rand],
+        clientSecret: this.clientsecrets[rand],
+      });
+      sApi.setAccessToken(this.tokens[rand]);
       const track = (
         await new SRequest().retryWrapper(
-          this.spotifyApi,
+          sApi,
           RequestTypes.SearchTracks,
           `${trackName} artist:${artistName}`,
           {
@@ -397,6 +404,8 @@ export class StreamsService {
       )['body'].tracks.items?.[0];
 
       console.log(
+        rand,
+        this.clientids[rand],
         track?.id ? 'added new track' : 'failed new track',
         track?.id ? track.name : trackName,
       );
