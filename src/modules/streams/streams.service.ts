@@ -351,7 +351,13 @@ export class StreamsService {
       if (streams?.length > 0) {
         // @ts-ignore
         const body = streams.flatMap((doc) => [
-          { index: { _index: 'streams' } },
+          {
+            index: {
+              _index: 'streams',
+              _type: 'stream',
+              _id: `${doc.userId}-${doc.endTime - doc.playedMs}`,
+            },
+          },
           doc,
         ]);
 
@@ -412,8 +418,8 @@ export class StreamsService {
       //   track?.id ? 'added new track' : 'failed new track',
       //   track?.id ? track.name : trackName,
       // );
-
-      const body = track?.id
+      const hasId = !!track?.id;
+      const body = hasId
         ? {
             id: track.id,
             name: trackName,
@@ -431,6 +437,7 @@ export class StreamsService {
       await this.elasticsearchService.index({
         index: 'tracks',
         type: 'track',
+        id: hasId ? track.id : null,
         body,
       });
 
