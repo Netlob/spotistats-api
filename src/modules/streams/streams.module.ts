@@ -6,7 +6,7 @@ import { StreamsService } from './streams.service';
 
 @Module({
   imports: [
-    AuthModule,
+    // AuthModule,
     ElasticsearchModule.register({
       node: process.env.ELASTIC_URL,
     }),

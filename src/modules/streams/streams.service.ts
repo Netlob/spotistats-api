@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { AuthService } from '../auth/auth.service';
-import { PrismaService } from '../prisma/prisma.service';
+// import { Cron, CronExpression } from '@nestjs/schedule';
+// import { AuthService } from '../auth/auth.service';
+// import { PrismaService } from '../prisma/prisma.service';
 const SpotifyWebApi = require('spotify-web-api-node');
 const { promisify } = require('util');
 const { resolve } = require('path');
@@ -14,9 +14,7 @@ const stat = promisify(fs.stat);
 export class StreamsService {
   spotifyApi: any;
   constructor(
-    private readonly elasticsearchService: ElasticsearchService,
-    private prisma: PrismaService,
-    private authService: AuthService,
+    private readonly elasticsearchService: ElasticsearchService, // private prisma: PrismaService, // private authService: AuthService,
   ) {
     // this.syncStreams();
     this.spotifyApi = new SpotifyWebApi({
