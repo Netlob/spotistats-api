@@ -40,9 +40,12 @@ export class StreamsService {
       this.clientsecrets.push(secrets[i]);
       this.spotifyApi.setAccessToken(token);
     }
-    this.migrateStreams(0, 20);
-    this.migrateStreams(20, 40);
-    this.migrateStreams(40, 60);
+    this.migrateStreams(0, 150);
+    this.migrateStreams(150, 300);
+    this.migrateStreams(300, 450);
+    this.migrateStreams(450, 600);
+    this.migrateStreams(600, 750);
+    this.migrateStreams(750, 850);
   }
 
   async getStreams(userId, before, after, limit, offset) {
@@ -302,7 +305,7 @@ export class StreamsService {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const id = file.substring(58).split('/')[0];
+      const id = file.split('/').slice(-2)[0];
       if (!filesIds[id]) filesIds[id] = [];
       filesIds[id].push(file);
     }
@@ -403,12 +406,12 @@ export class StreamsService {
         )
       )['body'].tracks.items?.[0];
 
-      console.log(
-        rand,
-        this.clientids[rand],
-        track?.id ? 'added new track' : 'failed new track',
-        track?.id ? track.name : trackName,
-      );
+      // console.log(
+      //   rand,
+      //   this.clientids[rand],
+      //   track?.id ? 'added new track' : 'failed new track',
+      //   track?.id ? track.name : trackName,
+      // );
 
       const body = track?.id
         ? {
@@ -487,12 +490,17 @@ class SRequest {
         .catch((err) => {
           // If we get a 'too many requests' error then wait and retry
           if (err.statusCode === 429) {
-            console.log('Waiting', err.headers['retry-after'], 'seconds');
             setTimeout(() => {
               this.request(client, type, param, args)
                 .then((data) => resolve(data))
                 .catch((err) => reject(err));
             }, parseInt(err.headers['retry-after']) * 1000 + 1000);
+            console.log(
+              'Waiting',
+              err.headers['retry-after'],
+              'seconds with accessToken ',
+              client.getCredentials().accessToken,
+            );
           }
         });
     });
