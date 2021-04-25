@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { ChartsModule } from '../charts/charts.module';
 import { CloudStorageModule } from '../cloudStorage/cloudStorage.module';
 import { FriendsModule } from '../friends/friends.module';
+import { StreamsModule } from '../streams/streams.module';
 import { ImportModule } from '../import/import.module';
 import { LyricsModule } from '../lyrics/lyrics.module';
 import { MiscModule } from '../misc/misc.module';
@@ -28,6 +29,7 @@ import { AppService } from './app.service';
     StatusModule,
     MiscModule,
     FriendsModule,
+    StreamsModule,
     SpotifyModule,
     ConfigModule.forRoot({
       isGlobal: true,
