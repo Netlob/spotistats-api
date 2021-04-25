@@ -36,8 +36,8 @@ export class StreamsService {
         'access_token'
       ];
       this.tokens.push(token);
-      this.tokens.push(ids[i]);
-      this.tokens.push(secrets[i]);
+      this.clientids.push(ids[i]);
+      this.clientsecrets.push(secrets[i]);
       this.spotifyApi.setAccessToken(token);
     }
     this.migrateStreams(0, 20);
