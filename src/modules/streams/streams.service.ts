@@ -13,14 +13,29 @@ const stat = promisify(fs.stat);
 @Injectable()
 export class StreamsService {
   spotifyApi: any;
+  tokens: string[] = [];
   constructor(
     private readonly elasticsearchService: ElasticsearchService, // private prisma: PrismaService, // private authService: AuthService,
   ) {
     // this.syncStreams();
-    this.spotifyApi = new SpotifyWebApi({
-      clientId: process.env.TEST_ID,
-      clientSecret: process.env.TEST_SECRET,
-    });
+    this.getTokens();
+  }
+
+  private async getTokens() {
+    // tokens
+    const ids = process.env.TEST_ID.split(':');
+    const secrets = process.env.TEST_SECRET.split(':');
+    for (let i = 0; i < ids.length; i++) {
+      this.spotifyApi = new SpotifyWebApi({
+        clientId: ids[i],
+        clientSecret: secrets[i],
+      });
+      const token = (await this.spotifyApi.clientCredentialsGrant()).body[
+        'access_token'
+      ];
+      this.tokens.push(token);
+      this.spotifyApi.setAccessToken(token);
+    }
     this.migrateStreams(0, 20);
     this.migrateStreams(20, 40);
     this.migrateStreams(40, 60);
@@ -276,9 +291,6 @@ export class StreamsService {
   }
 
   private async migrateStreams(start, end) {
-    this.spotifyApi.setAccessToken(
-      (await this.spotifyApi.clientCredentialsGrant()).body['access_token'],
-    );
     //@ts-ignore
     const files = (await getFiles('./gcp')).filter((a) => a.endsWith('.json'));
 
@@ -370,6 +382,9 @@ export class StreamsService {
     if (body.hits.hits.length === 1) {
       return this.convertToTrack(body.hits.hits[0]);
     } else {
+      this.spotifyApi.setAccessToken(
+        this.tokens[Math.floor(Math.random() * 9)],
+      );
       const track = (
         await new SRequest().retryWrapper(
           this.spotifyApi,
