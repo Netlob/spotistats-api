@@ -484,6 +484,7 @@ class SRequest {
    * @param {*} param
    */
   retryWrapper = (client, type, param, args) => {
+    console.log('Searching for', param);
     return new Promise((resolve, reject) => {
       this.request(client, type, param, args)
         .then((data) => resolve(data))
