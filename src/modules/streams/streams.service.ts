@@ -69,7 +69,7 @@ export class StreamsService {
             must: [
               {
                 match_phrase: {
-                  userId,
+                  userId: this.escapeLucene(userId),
                 },
               },
             ],
@@ -103,12 +103,12 @@ export class StreamsService {
             must: [
               {
                 match_phrase: {
-                  userId,
+                  userId: this.escapeLucene(userId),
                 },
               },
               {
                 match_phrase: {
-                  trackId,
+                  trackId: this.escapeLucene(trackId),
                 },
               },
             ],
@@ -140,12 +140,12 @@ export class StreamsService {
             must: [
               {
                 match_phrase: {
-                  userId,
+                  userId: this.escapeLucene(userId),
                 },
               },
               {
                 match_phrase: {
-                  trackId,
+                  trackId: this.escapeLucene(trackId),
                 },
               },
             ],
@@ -179,12 +179,12 @@ export class StreamsService {
             must: [
               {
                 match_phrase: {
-                  userId,
+                  userId: this.escapeLucene(userId),
                 },
               },
               {
-                match_phrase: {
-                  artistId,
+                match: {
+                  artistIds: this.escapeLucene(artistId),
                 },
               },
             ],
@@ -274,7 +274,7 @@ export class StreamsService {
       body: {
         query: {
           match_phrase: {
-            userId,
+            userId: this.escapeLucene(userId),
           },
         },
         from: 0,
@@ -389,12 +389,12 @@ export class StreamsService {
             must: [
               {
                 match_phrase: {
-                  name: trackName,
+                  name: this.escapeLucene(trackName),
                 },
               },
               {
                 match_phrase: {
-                  artistName,
+                  artistName: this.escapeLucene(artistName),
                 },
               },
             ],
@@ -453,6 +453,10 @@ export class StreamsService {
 
       return body;
     }
+  }
+
+  private escapeLucene(str) {
+    return str.replace(/([\!\*\+\&\|\(\)\[\]\{\}\^\~\?\:\"])/g, '\\$1');
   }
 }
 
