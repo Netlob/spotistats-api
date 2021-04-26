@@ -24,7 +24,17 @@ export class StreamsService {
   }
 
   private async getTokens() {
-    // tokens
+    await this.setTokens();
+    setInterval(this.setTokens, 55 * 60 * 1000);
+    this.migrateStreams(0, 150);
+    this.migrateStreams(150, 300);
+    this.migrateStreams(300, 450);
+    this.migrateStreams(450, 600);
+    this.migrateStreams(600, 750);
+    this.migrateStreams(750, 850);
+  }
+
+  private async setTokens() {
     const ids = process.env.TEST_ID.split(':');
     const secrets = process.env.TEST_SECRET.split(':');
     for (let i = 0; i < ids.length; i++) {
@@ -40,12 +50,12 @@ export class StreamsService {
       this.clientsecrets.push(secrets[i]);
       this.spotifyApi.setAccessToken(token);
     }
-    this.migrateStreams(0, 150);
-    this.migrateStreams(150, 300);
-    this.migrateStreams(300, 450);
-    this.migrateStreams(450, 600);
-    this.migrateStreams(600, 750);
-    this.migrateStreams(750, 850);
+    if (this.tokens.length > 9) {
+      console.log('splucing');
+      this.tokens.splice(0, 9);
+      this.clientids.splice(0, 9);
+      this.clientsecrets.splice(0, 9);
+    }
   }
 
   async getStreams(userId, before, after, limit, offset) {
