@@ -38,6 +38,32 @@ export class StreamsController {
 
   @UseGuards(AuthGuard)
   @HttpCode(200)
+  @Get('/count')
+  async getCount(
+    @UserId() userId: string,
+    @Query('before') before: number,
+    @Query('after') after: number,
+  ): Promise<Response> {
+    return {
+      data: await this.streamsService.getCount(userId, before, after),
+    };
+  }
+
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @Get('/duration')
+  async getDuration(
+    @UserId() userId: string,
+    @Query('before') before: number,
+    @Query('after') after: number,
+  ): Promise<Response> {
+    return {
+      data: await this.streamsService.getDuration(userId, before, after),
+    };
+  }
+
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
   @Get('/track/:trackId')
   async getTrackStreams(
     @UserId() userId: string,

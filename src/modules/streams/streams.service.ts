@@ -56,6 +56,74 @@ export class StreamsService {
     return body.hits.hits.map(this.convertToStream);
   }
 
+  async getCount(userId: string, before: number, after: number) {
+    const query = {
+      index: 'streams',
+      body: {
+        query: {
+          bool: {
+            must: [
+              {
+                term: {
+                  'userId.keyword': this.escapeLucene(userId),
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    if (before && after) {
+      query.body.query.bool.must.push({
+        // @ts-ignore
+        range: {
+          endTime: {
+            lte: before,
+            gte: after,
+          },
+        },
+      });
+    }
+    const { body } = await this.elasticsearchService.count(query);
+    return body.count;
+  }
+
+  async getDuration(userId: string, before: number, after: number) {
+    const query = {
+      index: 'streams',
+      size: 0,
+      body: {
+        query: {
+          bool: {
+            must: [
+              {
+                term: {
+                  'userId.keyword': this.escapeLucene(userId),
+                },
+              },
+            ],
+          },
+        },
+        aggs: {
+          total_duration: { sum: { field: 'playedMs' } },
+        },
+      },
+    };
+    if (before && after) {
+      query.body.query.bool.must.push({
+        // @ts-ignore
+        range: {
+          endTime: {
+            lte: before,
+            gte: after,
+          },
+        },
+      });
+    }
+    const { body } = await this.elasticsearchService.search(query);
+    return body.aggregations.total_duration.value;
+  }
+
   async getTrackStreams(
     userId: string,
     trackId: string,
