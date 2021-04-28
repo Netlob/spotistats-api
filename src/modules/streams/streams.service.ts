@@ -393,7 +393,7 @@ export class StreamsService {
     return body.aggregations.total_duration.value;
   }
 
-  // @Cron('0 */100 * * * *')
+  @Cron('0 */100 * * * *')
   private async syncStreams() {
     console.time('Streamsync');
     const users = await this.prisma.user.findMany({
