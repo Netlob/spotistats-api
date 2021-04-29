@@ -54,8 +54,6 @@ export class UserAuthGuard implements CanActivate {
 export class AuthGuard implements CanActivate {
   private readonly logger = new Logger('Auth');
 
-  constructor(private prisma: PrismaService) {}
-
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const token = request?.headers?.authorization as string;
