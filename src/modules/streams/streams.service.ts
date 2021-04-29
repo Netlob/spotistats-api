@@ -577,6 +577,9 @@ export class StreamsService {
         valid: true,
       });
 
+      const endTime = new Date(stream.played_at);
+      endTime.setSeconds(0, 0);
+
       return {
         userId: user.id,
         trackId: track.id,
@@ -584,7 +587,7 @@ export class StreamsService {
         artistIds: artists.map((artist: any) => artist.id),
         contextId: this.getIdFromURI(context?.uri),
         playedMs: track.duration_ms,
-        endTime: new Date(stream.played_at).getTime(),
+        endTime: endTime.getTime(),
       };
     });
     if (streams?.length > 0) {
