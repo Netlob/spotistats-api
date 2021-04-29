@@ -183,4 +183,42 @@ export class StreamsController {
       ),
     };
   }
+
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @Get('/list/tracks/count')
+  async getTracksListCount(
+    @UserId() userId: string,
+    @Query('ids') trackIds: string,
+    @Query('before') before: number,
+    @Query('after') after: number,
+  ): Promise<Response> {
+    return {
+      data: await this.streamsService.getTracksListCount(
+        userId,
+        trackIds.split(','),
+        before,
+        after,
+      ),
+    };
+  }
+
+  @UseGuards(AuthGuard)
+  @HttpCode(200)
+  @Get('/list/artists/count')
+  async getTrackListCount(
+    @UserId() userId: string,
+    @Query('ids') trackIds: string,
+    @Query('before') before: number,
+    @Query('after') after: number,
+  ): Promise<Response> {
+    return {
+      data: await this.streamsService.getArtistsListCount(
+        userId,
+        trackIds.split(','),
+        before,
+        after,
+      ),
+    };
+  }
 }

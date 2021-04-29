@@ -5,7 +5,9 @@ import ShortUniqueId from 'short-unique-id';
 import { CloudStorageService } from '../cloudStorage/cloudStorage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
+import { StreamsService } from '../streams/streams.service';
 
+const importsPath = process.env.IMPORTS_PATH;
 @Injectable()
 export class ImportService {
   private codeService: _CodeService;
@@ -14,6 +16,7 @@ export class ImportService {
     redisService: RedisService,
     prisma: PrismaService,
     private cloudStorage: CloudStorageService,
+    private streamsService: StreamsService,
   ) {
     this.codeService = new _CodeService(redisService, prisma);
   }
@@ -107,19 +110,21 @@ export class ImportService {
     const fileName = `import-${user.id}-${new Date()
       .toJSON()
       .slice(0, 10)}.json`;
-    const tempFilePath = `/tmp/${fileName}`;
-    fs.writeFileSync(tempFilePath, JSON.stringify(totalContent));
+    const filePath = `${importsPath}/${fileName}`;
+    fs.writeFileSync(filePath, JSON.stringify(totalContent));
 
-    await this.cloudStorage.uploadFile(user, fileName, tempFilePath);
+    // await this.cloudStorage.uploadFile(user, fileName, filePath);
 
-    const importedFiles = await this.cloudStorage.listFiles(user);
+    this.streamsService.importStreams(filePath);
 
-    this.codeService.remove(code);
+    // const importedFiles = await this.cloudStorage.listFiles(user);
+
+    // this.codeService.remove(code);
 
     return {
       user,
-      imports: importedFiles,
-      message: `Succesfully imported ${totalStreams} streams!`,
+      // imports: importedFiles,
+      message: `Import of ${totalStreams} streams started. It may take a couple minutes to some hours before they're fully processed and can be seen in the app.`,
     };
   }
 }

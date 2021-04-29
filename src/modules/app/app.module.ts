@@ -22,7 +22,6 @@ import { AppService } from './app.service';
     PrismaModule,
     CloudStorageModule,
     AuthModule,
-    ImportModule,
     LyricsModule,
     ChartsModule,
     PlusModule,
@@ -30,6 +29,7 @@ import { AppService } from './app.service';
     MiscModule,
     FriendsModule,
     StreamsModule,
+    ImportModule,
     SpotifyModule,
     ConfigModule.forRoot({
       isGlobal: true,

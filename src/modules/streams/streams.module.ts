@@ -13,5 +13,6 @@ import { StreamsService } from './streams.service';
   ],
   controllers: [StreamsController],
   providers: [StreamsService],
+  exports: [StreamsService],
 })
 export class StreamsModule {}
