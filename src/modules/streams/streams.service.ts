@@ -5,8 +5,25 @@ import { ApiClient, User, UserSettings } from '@prisma/client';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as fs from 'fs';
+import { RedisService } from '../redis/redis.service';
 const SpotifyWebApi = require('spotify-web-api-node');
 
+// const { promisify } = require('util');
+// const { resolve } = require('path');
+// const readdir = promisify(fs.readdir);
+// const stat = promisify(fs.stat);
+
+// async function getFiles(dir: string) {
+//   const subdirs = await readdir(dir);
+//   const files = await Promise.all(
+//     subdirs.map(async (subdir: any) => {
+//       const res = resolve(dir, subdir);
+//       return (await stat(res)).isDirectory() ? getFiles(res) : res;
+//     }),
+//   );
+//   // @ts-ignore
+//   return files.reduce((a, f) => a.concat(f), []);
+// }
 @Injectable()
 export class StreamsService {
   tokens: string[] = [];
@@ -14,6 +31,7 @@ export class StreamsService {
   clientsecrets: string[] = [];
 
   constructor(
+    private readonly redisService: RedisService,
     private readonly elasticsearchService: ElasticsearchService,
     private prisma: PrismaService,
     private authService: AuthService,
@@ -21,6 +39,26 @@ export class StreamsService {
     this.setTokens();
     this.syncStreams();
     setInterval(() => this.setTokens(), 45 * 60 * 1000);
+    // setTimeout(() => this.migrate(), 1000);
+  }
+
+  private async migrate() {
+    // const files = await getFiles(
+    //   '/Users/sjoerdbolten/Documents/Projects/spotistats-api/gcp',
+    // );
+    // // @ts-ignore
+    // for (let i = files.length; i > 0; i--) {
+    //   // @ts-ignore
+    //   console.log(i, files.length);
+    //   try {
+    //     await this.importStreams(files[i]);
+    //   } catch (e) {
+    //     console.error(e);
+    //   }
+    // }
+    // await this.importStreams(
+    //   '/Users/sjoerdbolten/Downloads/import-sjoerdtest-00-00-0000.json',
+    // );
   }
 
   private async setTokens() {
@@ -48,6 +86,7 @@ export class StreamsService {
     } catch {
       setTimeout(() => this.setTokens(), 10 * 1000);
     }
+    console.log('tokens updated');
   }
 
   async getStreams(
@@ -578,7 +617,7 @@ export class StreamsService {
       });
 
       const endTime = new Date(stream.played_at);
-      endTime.setSeconds(0, 0);
+      // endTime.setSeconds(0, 0);
 
       return {
         userId: user.id,
@@ -588,6 +627,7 @@ export class StreamsService {
         contextId: this.getIdFromURI(context?.uri),
         playedMs: track.duration_ms,
         endTime: endTime.getTime(),
+        type: 'sync',
       };
     });
     if (streams?.length > 0) {
@@ -650,44 +690,112 @@ export class StreamsService {
   }
 
   public async importStreams(file: string) {
+    if (!file.endsWith('.json')) return;
     const id = file
       .split('/')
       .splice(-1)[0]
       .match(/import-(.*)-.*-.*-.*.json/)[1];
     console.time(id);
+
     const streams1 = JSON.parse(fs.readFileSync(file).toString()).filter(
       (value: any, index: number, self: any[]) => self.indexOf(value) === index,
     );
 
+    const isTechnicalFile =
+      'ts' in streams1[0] &&
+      'ms_played' in streams1[0] &&
+      'master_metadata_track_name' in streams1[0] &&
+      'spotify_track_uri' in streams1[0];
+
     const streams = [];
     const failed = [];
-    const notfailed = {};
 
-    for (let i = 0; i < streams1.length; i++) {
-      const stream = streams1[i];
-      if (failed.indexOf(`${stream[2]}-${stream[1]}`) > -1) continue;
-      let track = notfailed[`${stream[2]}-${stream[1]}`];
-      if (!track) track = await this.getTrack(stream[2], stream[1]);
+    if (isTechnicalFile) {
+      const idsToGet = new Set();
+      for (let i = 0; i < streams1.length; i++) {
+        const stream = streams1[i];
+        const trackid = this.getIdFromURI(stream?.spotify_track_uri);
 
-      if (!track || track.valid != true) {
-        failed.push(`${stream[2]}-${stream[1]}`);
-        continue;
+        if (
+          !trackid ||
+          !stream.spotify_track_uri ||
+          !stream.master_metadata_track_name ||
+          !stream.ms_played ||
+          !stream.offline_timestamp
+        ) {
+          continue;
+        }
+
+        const track = await this.getTrackById(trackid);
+
+        if (track) {
+          streams.push({
+            userId: id,
+            trackId: trackid,
+            trackName: track.name,
+            artistIds: track.artistIds,
+            contextId: null,
+            playedMs: stream.ms_played,
+            endTime: stream.offline_timestamp,
+          });
+        } else {
+          idsToGet.add(trackid);
+
+          streams.push({
+            userId: id,
+            trackId: trackid,
+            trackName: stream.master_metadata_track_name,
+            artistIds: null,
+            contextId: null,
+            playedMs: stream.ms_played,
+            endTime: stream.offline_timestamp,
+          });
+        }
       }
 
-      notfailed[`${stream[2]}-${stream[1]}`] = track;
+      const trackIds: string[] = Array.from(idsToGet) as string[];
+      for (let i = 0; i < trackIds.length; i = i + 50) {
+        const ids = trackIds.slice(i, i + 50);
+        const tracks = await this.getTracksList(ids);
+        for (let j = 0; j < tracks.length; j++) {
+          const track = tracks[j];
+          streams.forEach((stream) => {
+            if (stream.trackId === track.id) {
+              stream.artistIds = track.artists.map((artist: any) => artist.id);
+              stream.trackName = track.name;
+            }
+          });
+        }
+      }
+    } else {
+      for (let i = 0; i < streams1.length; i++) {
+        try {
+          const stream = streams1[i];
+          if (failed.indexOf(`${stream[2]}-${stream[1]}`) > -1) continue;
+          let track: any;
+          if (!track) track = await this.getTrack(stream[2], stream[1]);
 
-      streams.push({
-        userId: id,
-        trackId: track.id,
-        trackName: track.name,
-        artistIds: track.artistIds,
-        artistName: track.name,
-        contextId: null,
-        playedMs: stream[3],
-        endTime: stream[0] * 1000,
-      });
+          if (!track || track.valid != true) {
+            failed.push(`${stream[2]}-${stream[1]}`);
+            continue;
+          }
+
+          streams.push({
+            userId: id,
+            trackId: track.id,
+            trackName: track.name,
+            artistIds: track.artistIds,
+            contextId: null,
+            playedMs: stream[3],
+            endTime: stream[0] * 1000,
+            type: 'StreamingHistory.json',
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
     }
-
+    console.timeLog(id);
     if (streams?.length > 0) {
       // @ts-ignore
       const body = streams.flatMap((doc: any) => [
@@ -706,11 +814,21 @@ export class StreamsService {
       });
     }
 
-    fs.unlinkSync(file);
+    // fs.unlinkSync(file);
     console.timeEnd(id);
   }
 
   private async getTrack(trackName: string, artistName: string) {
+    const cached = await this.redisService.get(`${trackName}-${artistName}`);
+    if (
+      cached &&
+      typeof cached === 'object' &&
+      'id' in cached &&
+      'name' in cached &&
+      'artistIds' in cached
+    ) {
+      return cached;
+    }
     const { body } = await this.elasticsearchService.search({
       index: 'tracks',
       size: 1,
@@ -735,7 +853,9 @@ export class StreamsService {
       },
     });
     if (body.hits.hits.length === 1) {
-      return this.convertToTrack(body.hits.hits[0]);
+      const track = this.convertToTrack(body.hits.hits[0]);
+      this.redisService.set(track.id, track, { ttl: 0 });
+      return track;
     } else {
       const rand = Math.floor(Math.random() * 9);
       const spotifyApi = new SpotifyWebApi({
@@ -746,6 +866,7 @@ export class StreamsService {
       const track = (
         await new SRequest().retryWrapper(
           spotifyApi,
+          RequestTypes.SearchTracks,
           `${trackName} artist:${artistName}`,
           {
             limit: 1,
@@ -776,8 +897,81 @@ export class StreamsService {
         body,
       });
 
+      this.redisService.set(`${trackName}-${artistName}`, body, { ttl: 0 });
+      if (hasId) this.redisService.set(track.id, body, { ttl: 0 });
+
       return body;
     }
+  }
+
+  private async getTrackById(trackId: string) {
+    const cached = await this.redisService.get(trackId);
+    if (
+      cached &&
+      typeof cached === 'object' &&
+      'id' in cached &&
+      'name' in cached &&
+      'artistIds' in cached
+    ) {
+      return cached;
+    }
+    const { body } = await this.elasticsearchService.search({
+      index: 'tracks',
+      size: 1,
+      from: 0,
+      body: {
+        query: {
+          term: {
+            _id: trackId,
+          },
+        },
+      },
+    });
+    if (body.hits.hits.length === 1) {
+      const track = this.convertToTrack(body.hits.hits[0]);
+      this.redisService.set(track.id, track, { ttl: 0 });
+      return track;
+    } else {
+      return null;
+    }
+  }
+
+  private async getTracksList(trackIds: string[]) {
+    const rand = Math.floor(Math.random() * 9);
+    const spotifyApi = new SpotifyWebApi({
+      clientId: this.clientids[rand],
+      clientSecret: this.clientsecrets[rand],
+    });
+    spotifyApi.setAccessToken(this.tokens[rand]);
+    const tracks = (
+      await new SRequest().retryWrapper(
+        spotifyApi,
+        RequestTypes.Tracks,
+        trackIds,
+        {},
+      )
+    )['body']?.tracks;
+
+    for (let i = 0; i < tracks.length; i++) {
+      const track = tracks[i];
+      const body = {
+        id: track.id,
+        name: track.name,
+        artistName: track.artists[0].name,
+        artistIds: track.artists.map((artist: any) => artist.id),
+        valid: true,
+      };
+      await this.elasticsearchService.index({
+        index: 'tracks',
+        type: 'track',
+        id: track.id,
+        body,
+      });
+
+      this.redisService.set(track.id, body, { ttl: 0 });
+    }
+
+    return tracks;
   }
 
   private escapeLucene(str: string): string {
@@ -792,6 +986,7 @@ export class StreamsService {
   }
 
   private convertToTrack(obj: any) {
+    if (!('id' in obj._source)) obj._source.id = obj._id;
     return obj._source;
   }
 
@@ -803,21 +998,49 @@ export class StreamsService {
     }
   }
 }
+
+const RequestTypes = {
+  AudioFeatures: 'AudioFeatures',
+  ManyAudioFeatures: 'ManyAudioFeatures',
+  Album: 'Album',
+  Albums: 'Albums',
+  Artist: 'Artist',
+  Artists: 'Artists',
+  Tracks: 'Tracks',
+  SearchTracks: 'SearchTracks',
+};
+
 class SRequest {
-  retryWrapper = (client: any, param: any, args: any) => {
+  request = (client, type, param, args) => {
+    switch (type) {
+      case RequestTypes.Albums:
+        return client.getAlbums(param);
+      case RequestTypes.ManyAudioFeatures:
+        return client.getAudioFeaturesForTracks(param);
+      case RequestTypes.SearchTracks:
+        return client.searchTracks(param, args);
+      case RequestTypes.Artists:
+        return client.getArtists(param);
+      case RequestTypes.Tracks:
+        return client.getTracks(param);
+      default:
+        return new Promise((r) => r({ body: undefined }));
+    }
+  };
+
+  retryWrapper = (client, type, param, args) => {
     return new Promise((resolve, reject) => {
-      client
-        .searchTracks(param, args)
-        .then((data: any) => resolve(data))
-        .catch((err: any) => {
+      this.request(client, type, param, args)
+        .then((data) => resolve(data))
+        .catch((err) => {
           if (err.statusCode === 429) {
             setTimeout(() => {
-              client
-                .searchTracks(param, args)
-                .then((data: any) => resolve(data))
-                .catch((err: any) => reject(err));
+              this.request(client, type, param, args)
+                .then((data) => resolve(data))
+                .catch((err) => reject(err));
             }, parseInt(err.headers['retry-after']) * 1000 + 1000);
           }
+          console.log(err);
         });
     });
   };
