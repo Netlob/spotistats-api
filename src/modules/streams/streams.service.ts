@@ -1,29 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ElasticsearchService } from '@nestjs/elasticsearch';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { ApiClient, User, UserSettings } from '@prisma/client';
+import * as fs from 'fs';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
-import * as fs from 'fs';
 import { RedisService } from '../redis/redis.service';
 const SpotifyWebApi = require('spotify-web-api-node');
 
-// const { promisify } = require('util');
-// const { resolve } = require('path');
-// const readdir = promisify(fs.readdir);
-// const stat = promisify(fs.stat);
-
-// async function getFiles(dir: string) {
-//   const subdirs = await readdir(dir);
-//   const files = await Promise.all(
-//     subdirs.map(async (subdir: any) => {
-//       const res = resolve(dir, subdir);
-//       return (await stat(res)).isDirectory() ? getFiles(res) : res;
-//     }),
-//   );
-//   // @ts-ignore
-//   return files.reduce((a, f) => a.concat(f), []);
-// }
 @Injectable()
 export class StreamsService {
   tokens: string[] = [];
@@ -39,26 +23,6 @@ export class StreamsService {
     this.setTokens();
     this.syncStreams();
     setInterval(() => this.setTokens(), 45 * 60 * 1000);
-    // setTimeout(() => this.migrate(), 1000);
-  }
-
-  private async migrate() {
-    // const files = await getFiles(
-    //   '/Users/sjoerdbolten/Documents/Projects/spotistats-api/gcp',
-    // );
-    // // @ts-ignore
-    // for (let i = files.length; i > 0; i--) {
-    //   // @ts-ignore
-    //   console.log(i, files.length);
-    //   try {
-    //     await this.importStreams(files[i]);
-    //   } catch (e) {
-    //     console.error(e);
-    //   }
-    // }
-    // await this.importStreams(
-    //   '/Users/sjoerdbolten/Downloads/import-sjoerdtest-00-00-0000.json',
-    // );
   }
 
   private async setTokens() {
@@ -814,7 +778,7 @@ export class StreamsService {
       });
     }
 
-    // fs.unlinkSync(file);
+    fs.unlinkSync(file);
     console.timeEnd(id);
   }
 
@@ -952,24 +916,32 @@ export class StreamsService {
       )
     )['body']?.tracks;
 
-    for (let i = 0; i < tracks.length; i++) {
-      const track = tracks[i];
-      const body = {
-        id: track.id,
-        name: track.name,
-        artistName: track.artists[0].name,
-        artistIds: track.artists.map((artist: any) => artist.id),
-        valid: true,
-      };
-      await this.elasticsearchService.index({
-        index: 'tracks',
-        type: 'track',
-        id: track.id,
-        body,
-      });
+    const body = tracks
+      .map((track) => {
+        const body = {
+          id: track.id,
+          name: track.name,
+          artistName: track.artists[0].name,
+          artistIds: track.artists.map((artist: any) => artist.id),
+          valid: true,
+        };
+        this.redisService.set(track.id, body, { ttl: 0 });
+        return body;
+      })
+      .flatMap((doc: any) => [
+        {
+          index: {
+            _index: 'tracks',
+            _type: 'track',
+            _id: doc.id,
+          },
+        },
+        doc,
+      ]);
 
-      this.redisService.set(track.id, body, { ttl: 0 });
-    }
+    await this.elasticsearchService.bulk({
+      body,
+    });
 
     return tracks;
   }
